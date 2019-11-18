@@ -16,17 +16,77 @@ EVENT onStartup, onStartup, "", Condition AlwaysTrue
 EVENT StartJump, StartJump, "", Condition AlwaysTrue
 
 //*************************************************************
+// onStartup
+// Events: onStartup
+//*************************************************************
+PROGRAM onStartup
+
+// Declare set set flags
+Global isMassLocked = 0
+Global isFsdCooldown = 0
+Global isFsdCharging = 0
+Global isStartHyperJump = 0
+Global isDocked = 0
+Global superCruiseState = 0
+
+// Declare and set strings
+Global currentSystem = ""
+Global starClass = ""
+Global currentDock = ""
+
+END PROGRAM
+
+PROGRAM updateMFD
+	// ToDo: Move all MFD setup based on variables here
+END PROGRAM
+
+PROGRAM updateFsdLights
+
+// ToDo: Move all FSD lighting status based on variables here
+// isFsdCooldown > isFsdCharging > isStartHyperJump > isMassLocked > superCruiseState
+If isFsdCooldown IsTrue
+	// Cooldown state T3/T4 = Red flashing 1s on 1s off
+	DLLCall EDDX52, setLED, TOGGLE_3_4, RED
+	DLLCall EDDX52, advSetLED, 11, 1, 1, 1, 1, 0
+	DLLCall EDDX52, syncFlashPatterns
+ElseIf isFsdCharging IsTrue
+	// Charging state T3/T4 = Amber flashing .25s on .25s off
+	DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
+	DLLCall EDDX52, advSetLED, 11, 1, 1, 0.25, 0.25, 0
+	DLLCall EDDX52, advSetLED, 12, 1, 1, 0.25, 0.25, 0
+	DLLCall EDDX52, syncFlashPatterns  
+ElseIf isStartHyperJump IsTrue
+	// Hyperspace jump in progress = T3/T4 = Amber (will change soon)
+	DLLCall EDDX52, setLED, TOGGLE_3_4, YELLOW
+ElseIf isMassLocked	IsTrue
+	// Mass locked = T3/T4 = Red
+    DLLCall EDDX52, setLED, TOGGLE_3_4, RED
+ElseIf superCruiseState IsTrue
+	// In supercruise = T3/T4 = Green flashing 1s on 1s off
+    DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
+    DLLCall EDDX52, advSetLED, 12, 1, 1, 1, 1, 0
+    DLLCall EDDX52, syncFlashPatterns  
+Else
+	// Otherwise in regular space = T3/T4 = Green
+    DLLCall EDDX52, setLED, TOGGLE_3_4, GREEN
+		
+END PROGRAM
+
+PROGRAM updateGearLight
+	// ToDo: Move all gear light settings here
+END PROGRAM
+
+//*************************************************************
 // UIFsdMassLocked
 // Events: UIFsdMassLocked
 //*************************************************************
 PROGRAM UIFsdMassLocked
 
 If EventClass_MassLocked IsTrue
-    DLLCall EDDX52, setLED, TOGGLE_3_4, RED
     Global isMassLocked = 1
 Else 
-    DLLCall EDDX52, setLED, TOGGLE_3_4, GREEN
     Global isMassLocked = 0
+Call updateFsdLights
 
 END PROGRAM
 
@@ -37,21 +97,11 @@ END PROGRAM
 PROGRAM UIFsdCooldown
 
 If EventClass_CoolDown IsTrue
-	Global isFsdCooldown = 0
-    DLLCall EDDX52, setLED, TOGGLE_3_4, RED
-    DLLCall EDDX52, advSetLED, 11, 1, 1, 1, 1, 0
-    DLLCall EDDX52, syncFlashPatterns  
-ElseIf superCruiseState $== 1
 	Global isFsdCooldown = 1
-    DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
-    DLLCall EDDX52, advSetLED, 12, 1, 1, 1, 1, 0
-    DLLCall EDDX52, syncFlashPatterns  
-ElseIf isMassLocked IsTrue
-	Global isFsdCooldown = 0
-    DLLCall EDDX52, setLED, TOGGLE_3_4, RED
 Else 
 	Global isFsdCooldown = 0
-    DLLCall EDDX52, setLED, TOGGLE_3_4, GREEN
+	
+Call updateFsdLights
 
 END PROGRAM
 
@@ -62,16 +112,11 @@ END PROGRAM
 PROGRAM UISupercruise
 
 If EventClass_Supercruise IsTrue
-    DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
-    DLLCall EDDX52, advSetLED, 12, 1, 1, 1, 1, 0
-    DLLCall EDDX52, syncFlashPatterns  
     Global superCruiseState = 1
-ElseIf isMassLocked IsTrue
-    DLLCall EDDX52, setLED, TOGGLE_3_4, RED
-	Global superCruiseState = 0
 Else 
-    DLLCall EDDX52, setLED, TOGGLE_3_4, YELLOW
     Global superCruiseState = 0
+
+Call updateFsdLights
 
 END PROGRAM
 
@@ -83,24 +128,10 @@ PROGRAM UIFsdCharging
 
 If EventClass_Charging IsTrue
 	Global isFsdCharging = 1
-    // DLLCall EDDX52, setLED, TOGGLE_3_4, YELLOW
-    DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
-    DLLCall EDDX52, advSetLED, 11, 1, 1, 0.25, 0.25, 0
-    DLLCall EDDX52, advSetLED, 12, 1, 1, 0.25, 0.25, 0
-    DLLCall EDDX52, syncFlashPatterns  
-ElseIf superCruiseState $== 1
-	Global isFsdCharging = 0
-    DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
-    DLLCall EDDX52, advSetLED, 12, 1, 1, 1, 1, 0
-    DLLCall EDDX52, syncFlashPatterns  
-ElseIf isMassLocked IsTrue
-	Global isFsdCharging = 0
-    DLLCall EDDX52, setLED, TOGGLE_3_4, RED
 Else 
 	Global isFsdCharging = 0
-    DLLCall EDDX52, advSetLED, 11, 0
 
-// DLLCall EDDX52, setLED, TOGGLE_3_4, GREEN
+Call updateFsdLights
 
 END PROGRAM
 
@@ -112,12 +143,13 @@ PROGRAM StartJump
 
 If EventClass_JumpType $== Hyperspace
 	Global isStartHyperJump = 1
-    DLLCall EDDX52, setLED, TOGGLE_3_4, YELLOW
     DLLCall EDDX52, resetMFD
     DLLCall EDDX52, setString, 0, "Jumping to:", MFD_STARTJUMP1
     DLLCall EDDX52, setString, 1, %(EventClass_StarSystem), MFD_STARTJUMP2
     DLLCall EDDX52, setString, 2, "Type: %(EventClass_StarClass)", MFD_STARTJUMP3
 	Global starClass = %(EventClass_StarClass)
+
+Call updateFsdLights
 
 END PROGRAM
 
@@ -134,6 +166,8 @@ DLLCall EDDX52, setString, 1, %(EventClass_StarSystem), MFD_FSDJUMP2
 If starClass $!= ""
 	DLLCall EDDX52, setString, 2, "Type: %(starClass)", MFD_FSDJUMP3
 Global currentSystem = %(EventClass_StarSystem)
+
+Call updateFsdLights
 
 END PROGRAM
 
@@ -206,24 +240,6 @@ DLLCall EDDX52, setLED, POV_2, GREEN
 DLLCall EDDX52, setLED, CLUTCH, GREEN
 DLLCall EDDX52, setLED, THROTTLE, ON
 // Global isMassLocked = 0
-
-END PROGRAM
-
-//*************************************************************
-// onStartup
-// Events: onStartup
-//*************************************************************
-PROGRAM onStartup
-
-Global isMassLocked = 0
-Global isFsdCooldown = 0
-Global isFsdCharging = 0
-Global isStartHyperJump = 0
-Global isDocked = 0
-Global superCruiseState = 0
-Global currentSystem = ""
-Global starClass = ""
-Global currentDock = ""
 
 END PROGRAM
 
