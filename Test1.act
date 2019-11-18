@@ -1,0 +1,229 @@
+﻿ACTIONFILE V4
+
+ENABLED True
+
+EVENT UIFsdMassLocked, UIFsdMassLocked, "", Condition AlwaysTrue
+EVENT onRefreshEnd, StartupShutdown, "", Condition AlwaysTrue
+EVENT onShutdown, StartupShutdown, "", Condition AlwaysTrue
+EVENT UIFsdCharging, UIFsdCharging, "", Condition AlwaysTrue
+EVENT UIFsdCooldown, UIFsdCooldown, "", Condition AlwaysTrue
+EVENT UISupercruise, UISupercruise, "", Condition AlwaysTrue
+EVENT UILandingGear, UILandingGear, "", Condition AlwaysTrue
+EVENT FSDJump, FSDJump, "", Condition AlwaysTrue
+EVENT Docked, JournalDocked, "", Condition AlwaysTrue
+EVENT UIDocked, UIDocked, "", Condition AlwaysTrue
+EVENT onStartup, onStartup, "", Condition AlwaysTrue
+EVENT StartJump, StartJump, "", Condition AlwaysTrue
+
+//*************************************************************
+// UIFsdMassLocked
+// Events: UIFsdMassLocked
+//*************************************************************
+PROGRAM UIFsdMassLocked
+
+If EventClass_MassLocked IsTrue
+    DLLCall EDDX52, setLED, TOGGLE_3_4, RED
+    Global isMassLocked = 1
+Else 
+    DLLCall EDDX52, setLED, TOGGLE_3_4, GREEN
+    Global isMassLocked = 0
+
+END PROGRAM
+
+//*************************************************************
+// UIFsdCooldown
+// Events: UIFsdCooldown
+//*************************************************************
+PROGRAM UIFsdCooldown
+
+If EventClass_CoolDown IsTrue
+	Global isFsdCooldown = 0
+    DLLCall EDDX52, setLED, TOGGLE_3_4, RED
+    DLLCall EDDX52, advSetLED, 11, 1, 1, 1, 1, 0
+    DLLCall EDDX52, syncFlashPatterns  
+ElseIf superCruiseState $== 1
+	Global isFsdCooldown = 1
+    DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
+    DLLCall EDDX52, advSetLED, 12, 1, 1, 1, 1, 0
+    DLLCall EDDX52, syncFlashPatterns  
+ElseIf isMassLocked IsTrue
+	Global isFsdCooldown = 0
+    DLLCall EDDX52, setLED, TOGGLE_3_4, RED
+Else 
+	Global isFsdCooldown = 0
+    DLLCall EDDX52, setLED, TOGGLE_3_4, GREEN
+
+END PROGRAM
+
+//*************************************************************
+// UISupercruise
+// Events: UISupercruise
+//*************************************************************
+PROGRAM UISupercruise
+
+If EventClass_Supercruise IsTrue
+    DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
+    DLLCall EDDX52, advSetLED, 12, 1, 1, 1, 1, 0
+    DLLCall EDDX52, syncFlashPatterns  
+    Global superCruiseState = 1
+ElseIf isMassLocked IsTrue
+    DLLCall EDDX52, setLED, TOGGLE_3_4, RED
+	Global superCruiseState = 0
+Else 
+    DLLCall EDDX52, setLED, TOGGLE_3_4, YELLOW
+    Global superCruiseState = 0
+
+END PROGRAM
+
+//*************************************************************
+// UIFsdCharging
+// Events: UIFsdCharging
+//*************************************************************
+PROGRAM UIFsdCharging
+
+If EventClass_Charging IsTrue
+	Global isFsdCharging = 1
+    // DLLCall EDDX52, setLED, TOGGLE_3_4, YELLOW
+    DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
+    DLLCall EDDX52, advSetLED, 11, 1, 1, 0.25, 0.25, 0
+    DLLCall EDDX52, advSetLED, 12, 1, 1, 0.25, 0.25, 0
+    DLLCall EDDX52, syncFlashPatterns  
+ElseIf superCruiseState $== 1
+	Global isFsdCharging = 0
+    DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
+    DLLCall EDDX52, advSetLED, 12, 1, 1, 1, 1, 0
+    DLLCall EDDX52, syncFlashPatterns  
+ElseIf isMassLocked IsTrue
+	Global isFsdCharging = 0
+    DLLCall EDDX52, setLED, TOGGLE_3_4, RED
+Else 
+	Global isFsdCharging = 0
+    DLLCall EDDX52, advSetLED, 11, 0
+
+// DLLCall EDDX52, setLED, TOGGLE_3_4, GREEN
+
+END PROGRAM
+
+//*************************************************************
+// StartJump
+// Events: StartJump
+//*************************************************************
+PROGRAM StartJump
+
+If EventClass_JumpType $== Hyperspace
+	Global isStartHyperJump = 1
+    DLLCall EDDX52, setLED, TOGGLE_3_4, YELLOW
+    DLLCall EDDX52, resetMFD
+    DLLCall EDDX52, setString, 0, "Jumping to:", MFD_STARTJUMP1
+    DLLCall EDDX52, setString, 1, %(EventClass_StarSystem), MFD_STARTJUMP2
+    DLLCall EDDX52, setString, 2, "Type: %(EventClass_StarClass)", MFD_STARTJUMP3
+	Global starClass = %(EventClass_StarClass)
+
+END PROGRAM
+
+//*************************************************************
+// FSDJump
+// Events: FSDJump
+//*************************************************************
+PROGRAM FSDJump
+
+Global isStartHyperJump = 0
+DLLCall EDDX52, resetMFD
+DLLCall EDDX52, setString, 0, "System:", MFD_FSDJUMP1
+DLLCall EDDX52, setString, 1, %(EventClass_StarSystem), MFD_FSDJUMP2
+If starClass $!= ""
+	DLLCall EDDX52, setString, 2, "Type: %(starClass)", MFD_FSDJUMP3
+Global currentSystem = %(EventClass_StarSystem)
+
+END PROGRAM
+
+//*************************************************************
+// UILandingGear
+// Events: UILandingGear
+//*************************************************************
+PROGRAM UILandingGear
+
+If EventClass_Gear IsTrue
+    DLLCall EDDX52, setLED, TOGGLE_1_2, RED
+Else 
+    DLLCall EDDX52, setLED, TOGGLE_1_2, GREEN
+
+END PROGRAM
+
+//*************************************************************
+// JournalDocked
+// Events: Docked
+//*************************************************************
+PROGRAM JournalDocked
+
+Global isDocked = 1
+Global currentDock = %(EventClass_StationName)
+DLLCall EDDX52, resetMFD
+DLLCall EDDX52, setString, 0, "Docked:", MFD_JDOCKED1
+If currentSystem $!= ""
+	DLLCall EDDX52, setString, 1, %(currentSystem), MFD_JDOCKED2
+ElseIf EventClass_StarSystem $!= ""
+	DLLCall EDDX52, setString, 1, %(EventClass_StarSystem), MFD_JDOCKED2
+	Global currentSystem = %(EventClass_StarSystem)
+DLLCall EDDX52, setString, 2, %(EventClass_StationName), MFD_JDOCKED3
+
+END PROGRAM
+
+//*************************************************************
+// UIDocked
+// Events: UIDocked
+//*************************************************************
+PROGRAM UIDocked
+
+If EventClass_Docked IsFalse
+	Global isDocked = 0
+	Global currentDock = ""
+
+	If currentSystem $!= ""
+		DLLCall EDDX52, resetMFD
+		DLLCall EDDX52, setString, 0, "System:", MFD_JUNDOCKED1
+		DLLCall EDDX52, setString, 1, %(currentSystem), MFD_JUNDOCKED2
+		If starClass $!= ""
+			DLLCall EDDX52, setString, 2, "Type: %(starClass)", MFD_FSDJUMP3
+
+END PROGRAM
+
+//*************************************************************
+// StartupShutdown
+// Events: onRefreshEnd, onShutdown
+//*************************************************************
+PROGRAM StartupShutdown
+
+DLLCall EDDX52, setLED, FIRE, GREEN
+DLLCall EDDX52, setLED, FIRE_A, GREEN
+DLLCall EDDX52, setLED, FIRE_B, GREEN
+DLLCall EDDX52, setLED, FIRE_D, GREEN
+DLLCall EDDX52, setLED, FIRE_E, GREEN
+DLLCall EDDX52, setLED, TOGGLE_1_2, GREEN
+DLLCall EDDX52, setLED, TOGGLE_3_4, GREEN
+DLLCall EDDX52, setLED, TOGGLE_5_6, GREEN
+DLLCall EDDX52, setLED, POV_2, GREEN
+DLLCall EDDX52, setLED, CLUTCH, GREEN
+DLLCall EDDX52, setLED, THROTTLE, ON
+// Global isMassLocked = 0
+
+END PROGRAM
+
+//*************************************************************
+// onStartup
+// Events: onStartup
+//*************************************************************
+PROGRAM onStartup
+
+Global isMassLocked = 0
+Global isFsdCooldown = 0
+Global isFsdCharging = 0
+Global isStartHyperJump = 0
+Global isDocked = 0
+Global superCruiseState = 0
+Global currentSystem = ""
+Global starClass = ""
+Global currentDock = ""
+
+END PROGRAM
+
