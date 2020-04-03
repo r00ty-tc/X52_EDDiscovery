@@ -2,6 +2,10 @@
 
 ENABLED True
 
+INSTALL Version=1.0.0.1
+INSTALL MinEDVersion=10.6.0.0
+INSTALL ShortDescription="LED and MFD actions for the Saitek X52 Pro HOTAS"
+
 EVENT UIFsdMassLocked, UIFsdMassLocked, "", Condition AlwaysTrue
 EVENT onRefreshEnd, StartupShutdown, "", Condition AlwaysTrue
 EVENT onShutdown, StartupShutdown, "", Condition AlwaysTrue
@@ -15,6 +19,181 @@ EVENT UIDocked, UIDocked, "", Condition AlwaysTrue
 EVENT onStartup, onStartup, "", Condition AlwaysTrue
 EVENT StartJump, StartJump, "", Condition AlwaysTrue
 EVENT Location, AtLocation, "", Condition AlwaysTrue
+EVENT Scan, Scan, "", Condition AlwaysTrue
+EVENT UIScoopingFuel, ScoopingFuel, "", Condition AlwaysTrue
+EVENT UIIsInDanger, UIIsInDanger, "", Condition AlwaysTrue
+EVENT UIUnderAttack, UIUnderAttack, "", Condition AlwaysTrue
+
+// ****************************************************************************************************************
+// This script provides feedback of FSD status, Landing gear state, and MFD info about current system/docking state
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// FSD state is on light for button T3/T4 (because I have FSD on T3)
+// When FSD is on cooldown, slow flashing red.
+// When Mass locked, steady red
+// When FSD available and not in supercruise, steady green
+// When FSD is charging, flash flashing amber
+// When FSD is in hyperdrive, steady amber
+// When FSD is in supercruise, slow flashing green
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// Landing gear state is on light for button T1/T2 (Gear is on T1 for me)
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// When gear is up, steady green
+// When gear is down, steady red
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// MFD will store star class when a jump is made, before that point star class is not known
+// Otherwise when not docked, it will show "System:" on line 1, the system name on line 2.
+// If star class is known "Type: x" with the class of star will be shown.
+// When performing a hyperspace jump it will show "Jumping to:" line 1, system name on line 2, and "Type: x" with 
+// star class on line 3.
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// Todo:
+// Use lights on throttle to indicate some status, under attack, heat warning, interdiction etc
+// Perhaps some other status for other activities as they come along, fuel scoop etc
+// Another idea is to have some lights change based on posture, e.g. most pips to engine, normal running (green)
+// most pips to systems, defensive (amber, flashing if under attack), most pips to weapons (red, flashing if under attack)
+// It's a real shame there's no feedback of the engine bars (not pips). Would have been good to give feedback of
+// boost availability.
+// Another idea is to turn off certain lights when they're not applicable. When docked for example
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// LEDS
+//    0  - FIRE
+//    1  - FIRE_A_RED
+//    2  - FIRE_A_GREEN
+//    3  - FIRE_B_RED
+//    4  - FIRE_B_GREEN
+//    5  - FIRE_D_RED
+//    6  - FIRE_D_GREEN 
+//    7  - FIRE_E_RED
+//    8  - FIRE_E_GREEN
+//    9  - TOGGLE_1_2_RED
+//    10 - TOGGLE_1_2_GREEN
+//    11 - TOGGLE_3_4_RED
+//    12 - TOGGLE_3_4_GREEN
+//    13 - TOGGLE_5_6_RED
+//    14 - TOGGLE_5_6_GREEN
+//    15 - POV_2_RED  (The thing at the left of the Fire button)
+//    16 - POV_2_GREEN
+//    17 - CLUTCH_RED  (The thing under the Fire D button)
+//    18 - CLUTCH_GREEN
+//    19 - THROTTLE
+// LED states:
+//     0 - OFF
+//     1 - ON
+// 
+// 
+// setLED: //Set the color of specific LED
+// Param1:
+//     FIRE
+//     FIRE_A
+//     FIRE_B
+//     FIRE_D
+//     FIRE_E
+//     TOGGLE_1_2
+//     TOGGLE_3_4
+//     TOGGLE_5_6
+//     POV_2   (The thing at the left of the Fire button)
+//     CLUTCH  (The thing under the Fire D button)
+//     THROTTLE
+// Param2:
+//     OFF
+//     ON       -> Turns on both LEDs, if available
+//     GREEN   \
+//     YELLOW  |-> Turns on LED if color cannot change
+//     RED     /
+// Return:
+//     SUCCESS
+// 
+// resetLED: //Turns off all LEDs and soft-syncs their states
+// Return:
+//     SUCCESS
+// 
+// advSetLED: //Use this when you want to iterate through all leds in a loop
+// Param1:
+//    [LED ID]
+// Param2:
+//    [State ID]
+// Param3:
+//    [repeats] //optional
+// Param4:
+//    [repeat Offset]  //mandatory, if repeats is included
+// Param5:
+//    [flash Duration]  //mandatory, if repeats is included
+// Param6:
+//    [flash Offset]  //mandatory, if repeats is included
+// Return:
+//    SUCCESS
+// 
+// setString: //Sets String on MFD at specified line
+// Param1:
+//     [line] //List can scroll
+// Param2:
+//     [Text]
+// Param3:
+//     [Entry ID (Can be a string, I recommend for example ID_GEAR) for editing and deleting]
+// Param4: //optional
+//     [Callback name] //Text can be clicked on
+// Return:
+//     SUCCESS
+// 
+// getLinesCount: //Returns the amount of lines on the MFD
+// Return:
+//     [Pages Count]
+// 
+// resetMFD: //Clears MFD
+// Return:
+//     SUCCESS
+// 
+// setLine: //scrolls to specified line on MFD
+// Param1:
+//     [Current Line]
+// 
+// reset: //resets MFD and LEDs
+// Return:
+//     SUCCESS
+// 
+// turnAllLEDOff: //turns off all LEDs at once, but does not sync them
+// Return:
+//     SUCCESS
+// 
+// syncFlashPatterns:  //Soft-syncs all flash patterns
+// Return:
+//     SUCCESS
+// 
+// permaSyncTo:  //Two LEDs will use the variable of the first LED, so they will be in sync forever. However, the LED with the lowest time to complete its cycle will win. Make sure the Flash pattern you are syncing to is active.
+// Param1:
+//     [LED ID, whiches variable will be used]
+// Param2:
+//     [LED ID to sync]
+// Return:
+//     SUCCESS
+// 
+// desync:  //Breaks perma-sync links;
+//     [LED ID]
+// 
+// peakMFD:  //Temporarily overrides MFD display with ingame info (For example a message received)
+// Param1:
+//     [Text (Will wrap itself on the entire display)]
+// Param4:
+//     [Peak time in seconds]
+// Param5: //optional
+//     [MFD Peak interaction callback]
+// 
+// removeMFDEntry
+// Param1:
+//     [Entry ID]
+// Return:
+//     SUCCESS
+// 
+// editMFDEntry
+// Param1:
+//     [Entry ID]
+// Param2:
+//     [New Entry Name]
+// Param3: //optional
+//     [New Entry Callback]
+// Return:
+//     SUCCESS
+// ****************************************************************************************************************
 
 //*************************************************************
 // onStartup
@@ -29,7 +208,11 @@ Global isFsdCharging = 0
 Global isStartHyperJump = 0
 Global isStartSupercruise = 0
 Global isDocked = 0
+Global isGearDown = 0
 Global superCruiseState = 0
+Global isScooping = 0
+Global isInDanger = 0
+Global isUnderAttack = 0
 
 // Declare and set strings
 Global currentSystem = ""
@@ -39,11 +222,65 @@ Global currentDock = ""
 END PROGRAM
 
 //*************************************************************
+// StartupShutdown
+// Events: onRefreshEnd, onShutdown
+//*************************************************************
+PROGRAM StartupShutdown
+
+// When starting/shutting down EDDProfile, set some default lighting settings (all green)
+DLLCall EDDX52, setLED, FIRE, GREEN
+DLLCall EDDX52, setLED, FIRE_A, GREEN
+DLLCall EDDX52, setLED, FIRE_B, GREEN
+DLLCall EDDX52, setLED, FIRE_D, GREEN
+DLLCall EDDX52, setLED, FIRE_E, GREEN
+DLLCall EDDX52, setLED, TOGGLE_1_2, GREEN
+DLLCall EDDX52, setLED, TOGGLE_3_4, GREEN
+DLLCall EDDX52, setLED, TOGGLE_5_6, GREEN
+DLLCall EDDX52, setLED, POV_2, GREEN
+DLLCall EDDX52, setLED, CLUTCH, GREEN
+DLLCall EDDX52, setLED, THROTTLE, ON
+
+END PROGRAM
+
+//*************************************************************
+// updateDocked
+//*************************************************************
+PROGRAM updateDocked
+// We handle docked separately because it turns all lights off and on.
+
+If isDocked IsTrue
+	DLLCall EDDX52, setLED, FIRE, OFF
+	DLLCall EDDX52, setLED, FIRE_A, OFF
+	DLLCall EDDX52, setLED, FIRE_B, OFF
+	DLLCall EDDX52, setLED, FIRE_D, OFF
+	DLLCall EDDX52, setLED, FIRE_E, OFF
+	DLLCall EDDX52, setLED, TOGGLE_1_2, OFF
+	DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
+	DLLCall EDDX52, setLED, TOGGLE_5_6, OFF
+	DLLCall EDDX52, setLED, POV_2, OFF
+	DLLCall EDDX52, setLED, CLUTCH, OFF
+	DLLCall EDDX52, setLED, THROTTLE, OFF
+Else
+	DLLCall EDDX52, setLED, FIRE, GREEN
+	DLLCall EDDX52, setLED, FIRE_A, GREEN
+	DLLCall EDDX52, setLED, FIRE_B, GREEN
+	DLLCall EDDX52, setLED, FIRE_D, GREEN
+	DLLCall EDDX52, setLED, FIRE_E, GREEN
+	DLLCall EDDX52, setLED, TOGGLE_1_2, GREEN
+	DLLCall EDDX52, setLED, TOGGLE_3_4, GREEN
+	DLLCall EDDX52, setLED, TOGGLE_5_6, GREEN
+	DLLCall EDDX52, setLED, POV_2, GREEN
+	DLLCall EDDX52, setLED, CLUTCH, GREEN
+	DLLCall EDDX52, setLED, THROTTLE, ON
+	Call updateFsdLights
+	Call updateGearLight
+	Call updateAuxLights
+END PROGRAM
+
+//*************************************************************
 // updateMFD
 //*************************************************************
 PROGRAM updateMFD
-
-// ToDo: Move all MFD setup based on variables here
 
 // Always reset MFD
 DLLCall EDDX52, resetMFD
@@ -56,12 +293,16 @@ ElseIf isDocked IsTrue
 Else 
     DLLCall EDDX52, setString, 0, "System:", MFD_FSDJUMP1
 
+// Set second line based on state
 If currentSystem $!= ""
     DLLCall EDDX52, setString, 1, %(currentSystem), MFD_STARTJUMP2
 Else 
     DLLCall EDDX52, setString, 1, "UNKNOWN", MFD_STARTJUMP2
 
-If starClass $!= ""
+// Set third line based on state
+If isDocked IsTrue
+    DLLCall EDDX52, setString, 2, %(currentDock), MFD_JDOCKED3
+ElseIf starClass $!= ""
     DLLCall EDDX52, setString, 2, "Type: %(starClass)", MFD_STARTJUMP3
 
 END PROGRAM
@@ -72,21 +313,32 @@ END PROGRAM
 PROGRAM updateFsdLights
 
 // This handles the lighting on T3/T4 which shows the FSD state using the following priority.
-// isFsdCooldown > isFsdCharging > isStartHyperJump > isMassLocked > superCruiseState
-If isFsdCooldown IsTrue
+// isDocked > isFsdCooldown > isStartHyperJump > isStartSupercruise > isFsdCharging > isMassLocked > superCruiseState
+If isDocked IsTrue
+	DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
+ElseIf isFsdCooldown IsTrue
     // Cooldown state T3/T4 = Red flashing 1s on 1s off
     DLLCall EDDX52, setLED, TOGGLE_3_4, RED
     DLLCall EDDX52, advSetLED, 11, 1, 1, 1, 1, 0
     DLLCall EDDX52, syncFlashPatterns
+ElseIf isStartHyperJump IsTrue
+    // Hyperspace jump in progress = T3/T4 = fast flash green/amber
+    DLLCall EDDX52, setLED, TOGGLE_3_4, GREEN
+    DLLCall EDDX52, advSetLED, 11, 1, 1, 0.25, 0.25, 0
+    //DLLCall EDDX52, advSetLED, 12, 1, 1, 0.25, 0.25, 0.5
+    DLLCall EDDX52, syncFlashPatterns
+    //DLLCall EDDX52, permaSyncTo, 11, 12
+ElseIf isStartSupercruise IsTrue
+	// Supercruise charging = T3/T4 = Green flashing .25s on .25s off
+    DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
+    DLLCall EDDX52, advSetLED, 12, 1, 1, 0.25, 0.25, 0
+    DLLCall EDDX52, syncFlashPatterns
 ElseIf isFsdCharging IsTrue
     // Charging state T3/T4 = Amber flashing .25s on .25s off
-    DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
+	DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
     DLLCall EDDX52, advSetLED, 11, 1, 1, 0.25, 0.25, 0
     DLLCall EDDX52, advSetLED, 12, 1, 1, 0.25, 0.25, 0
     DLLCall EDDX52, syncFlashPatterns  
-ElseIf isStartHyperJump IsTrue
-    // Hyperspace jump in progress = T3/T4 = Amber (will change soon)
-    DLLCall EDDX52, setLED, TOGGLE_3_4, YELLOW
 ElseIf isMassLocked IsTrue
     // Mass locked = T3/T4 = Red
     DLLCall EDDX52, setLED, TOGGLE_3_4, RED
@@ -95,10 +347,46 @@ ElseIf superCruiseState IsTrue
     DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
     DLLCall EDDX52, advSetLED, 12, 1, 1, 1, 1, 0
     DLLCall EDDX52, syncFlashPatterns  
-Else 
+Else
     // Otherwise in regular space = T3/T4 = Green
     DLLCall EDDX52, setLED, TOGGLE_3_4, GREEN
 
+END PROGRAM
+
+//*************************************************************
+// updateAuxLights
+//*************************************************************
+PROGRAM updateAuxLights
+
+// This handles all the other lights not handled elsewhere
+// Docked > Under Attack > Danger > Scooping
+
+If isDocked IsTrue
+	DLLCall EDDX52, setLED, TOGGLE_3_4, OFF
+ElseIf isInDanger IsTrue
+	DLLCall EDDX52, setLED, FIRE_A, OFF
+	DLLCall EDDX52, setLED, FIRE_B, OFF
+	DLLCall EDDX52, setLED, FIRE_D, OFF
+	DLLCall EDDX52, setLED, FIRE_E, OFF
+	DLLCall EDDX52, setLED, POV_2, OFF
+	DLLCall EDDX52, setLED, CLUTCH, OFF
+	DLLCall EDDX52, advSetLED, 1, 1, 1, 0.25, 0.25, 0
+	DLLCall EDDX52, advSetLED, 3, 1, 1, 0.25, 0.25, 0
+	DLLCall EDDX52, advSetLED, 5, 1, 1, 0.25, 0.25, 0
+	DLLCall EDDX52, advSetLED, 7, 1, 1, 0.25, 0.25, 0
+	DLLCall EDDX52, advSetLED, 15, 1, 1, 0.25, 0.25, 0
+	DLLCall EDDX52, advSetLED, 17, 1, 1, 0.25, 0.25, 0
+    DLLCall EDDX52, syncFlashPatterns  	
+ElseIf isScooping IsTrue
+	DLLCall EDDX52, setLED, FIRE_A, OFF
+	DLLCall EDDX52, setLED, FIRE_B, OFF
+	DLLCall EDDX52, advSetLED, 1, 1, 1, 1, 1, 0
+	DLLCall EDDX52, advSetLED, 2, 1, 1, 1, 1, 0
+	DLLCall EDDX52, advSetLED, 3, 1, 1, 1, 1, 1
+	DLLCall EDDX52, advSetLED, 4, 1, 1, 1, 1, 1
+Else
+	DLLCall EDDX52, setLED, FIRE_A, GREEN
+	DLLCall EDDX52, setLED, FIRE_B, GREEN
 END PROGRAM
 
 //*************************************************************
@@ -106,7 +394,11 @@ END PROGRAM
 //*************************************************************
 PROGRAM updateGearLight
 
-// ToDo: Move all gear light settings here
+// This handles the lighting on T1/T2 which shows the landing gear state
+If isGearDown IsTrue
+    DLLCall EDDX52, setLED, TOGGLE_1_2, RED
+Else 
+    DLLCall EDDX52, setLED, TOGGLE_1_2, GREEN
 
 END PROGRAM
 
@@ -116,11 +408,31 @@ END PROGRAM
 //*************************************************************
 PROGRAM UIFsdMassLocked
 
+// Update mass locked status then update FSD light state
 If EventClass_MassLocked IsTrue
     Global isMassLocked = 1
 Else 
     Global isMassLocked = 0
 Call updateFsdLights
+
+END PROGRAM
+
+PROGRAM UIIsInDanger
+If EventClass_Danger IsTrue
+	Global isInDanger = 1
+Else
+	Global isInDanger = 0
+	DLLCall EDDX52, setLED, FIRE_A, GREEN
+	DLLCall EDDX52, setLED, FIRE_B, GREEN
+	DLLCall EDDX52, setLED, FIRE_D, GREEN
+	DLLCall EDDX52, setLED, FIRE_E, GREEN
+	DLLCall EDDX52, setLED, POV_2, GREEN
+	DLLCall EDDX52, setLED, CLUTCH, GREEN
+
+Call updateAuxLights	
+END PROGRAM
+
+PROGRAM UIUnderAttack
 
 END PROGRAM
 
@@ -130,6 +442,7 @@ END PROGRAM
 //*************************************************************
 PROGRAM UIFsdCooldown
 
+// Update FSD cooldown status then update FSD light state
 If EventClass_CoolDown IsTrue
     Global isFsdCooldown = 1
 Else 
@@ -145,8 +458,10 @@ END PROGRAM
 //*************************************************************
 PROGRAM UISupercruise
 
+// Update supercruise status then update FSD light state
 If EventClass_Supercruise IsTrue
     Global superCruiseState = 1
+	Global isStartSupercruise = 0
 Else 
     Global superCruiseState = 0
 
@@ -160,6 +475,7 @@ END PROGRAM
 //*************************************************************
 PROGRAM UIFsdCharging
 
+// Update charging status then update FSD light state
 If EventClass_Charging IsTrue
     Global isFsdCharging = 1
 Else 
@@ -175,6 +491,7 @@ END PROGRAM
 //*************************************************************
 PROGRAM AtLocation
 	// Seems to be called at game start so let's populate info we can get
+	// Set current system and dock if set, and docked state then update MFD
 	If EventClass_Docked IsTrue
 		Global isDocked = 1
 	Else
@@ -196,6 +513,9 @@ END PROGRAM
 //*************************************************************
 PROGRAM StartJump
 
+// If we're hyperspace jumping, make sure to update current system to target system
+// (can the jump not happen at this point? Might be a problem if it can)
+// Update FSD status and MFD
 If EventClass_JumpType $== Hyperspace
     Global isStartSupercruise = 0
     Global isStartHyperJump = 1
@@ -204,7 +524,8 @@ If EventClass_JumpType $== Hyperspace
 Else 
     Global isStartHyperJump = 0
     Global isStartSupercruise = 1
-    Global currentSystem = %(EventClass_StarSystem)
+	if EventClass_StarSystem $!= ""
+		Global currentSystem = %(EventClass_StarSystem)
 
 Call updateFsdLights
 Call updateMFD
@@ -217,6 +538,7 @@ END PROGRAM
 //*************************************************************
 PROGRAM FSDJump
 
+// Update status to normal (we just finished a jump), then update FSD status and MFD
 Global isStartHyperJump = 0
 Global currentSystem = %(EventClass_StarSystem)
 
@@ -231,10 +553,13 @@ END PROGRAM
 //*************************************************************
 PROGRAM UILandingGear
 
+// Update gear state and then update gear light
 If EventClass_Gear IsTrue
-    DLLCall EDDX52, setLED, TOGGLE_1_2, RED
+    Global isGearDown = 1
 Else 
-    DLLCall EDDX52, setLED, TOGGLE_1_2, GREEN
+    Global isGearDown = 0
+	
+Call updateGearLight
 
 END PROGRAM
 
@@ -244,12 +569,14 @@ END PROGRAM
 //*************************************************************
 PROGRAM JournalDocked
 
+// Set docked state, and station name then update MFD
 Global isDocked = 1
 Global currentDock = %(EventClass_StationName)
 If currentSystem $== ""
     Global currentSystem = %(EventClass_StarSystem)
 
 Call updateMFD
+Call updateDocked
 
 END PROGRAM
 
@@ -259,33 +586,29 @@ END PROGRAM
 //*************************************************************
 PROGRAM UIDocked
 
+// If we undocked, change state and update MFD
 If EventClass_Docked IsFalse
     Global isDocked = 0
     Global currentDock = ""
 
     If currentSystem $!= ""
         Call updateMFD
+	
+	Call updateDocked
+END PROGRAM
+
+PROGRAM ScoopingFuel
+If EventClass_Scooping IsTrue
+	Global isScooping = 1
+Else
+	Global isScooping = 0
+
+Call updateAuxLights
 
 END PROGRAM
 
-//*************************************************************
-// StartupShutdown
-// Events: onRefreshEnd, onShutdown
-//*************************************************************
-PROGRAM StartupShutdown
-
-DLLCall EDDX52, setLED, FIRE, GREEN
-DLLCall EDDX52, setLED, FIRE_A, GREEN
-DLLCall EDDX52, setLED, FIRE_B, GREEN
-DLLCall EDDX52, setLED, FIRE_D, GREEN
-DLLCall EDDX52, setLED, FIRE_E, GREEN
-DLLCall EDDX52, setLED, TOGGLE_1_2, GREEN
-DLLCall EDDX52, setLED, TOGGLE_3_4, GREEN
-DLLCall EDDX52, setLED, TOGGLE_5_6, GREEN
-DLLCall EDDX52, setLED, POV_2, GREEN
-DLLCall EDDX52, setLED, CLUTCH, GREEN
-DLLCall EDDX52, setLED, THROTTLE, ON
-// Global isMassLocked = 0
-
+PROGRAM Scan
+// Check for terraformable planet in scan
+If EventClass_Terraformable IsTrue
+	Say "Planet Terraformable"
 END PROGRAM
-
